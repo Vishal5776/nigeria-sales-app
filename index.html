@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Aryan Export — Inventory & Sales</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#10B981" />
+
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f3f4f6;
+    }
+    .tab-active {
+      border-bottom: 3px solid #10B981;
+      color: #10B981;
+      font-weight: 600;
+    }
+    .card {
+      background: #fff;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+    }
+    #toast {
+      position: fixed;
+      right: 1rem;
+      bottom: 1rem;
+      z-index: 9999;
+    }
+    /* Simple input style */
+    .input {
+      width: 100%;
+      padding: 0.35rem 0.5rem;
+      border-radius: 0.375rem;
+      border: 1px solid #d1d5db;
+      font-size: 0.875rem;
+      background-color: #ffffff;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease,
+        background-color 0.15s ease;
+    }
+    .input::placeholder {
+      color: #9ca3af;
+    }
+    .input:focus {
+      border-color: #10B981;
+      box-shadow: 0 0 0 1px #10B98133;
+      background-color: #ffffff;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen">
+  <div class="container mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold">Aryan Export — Inventory &amp; Sales</h1>
+    </header>
+
+    <!-- Tabs -->
+    <div class="bg-white rounded-xl shadow mb-6">
+      <div class="flex">
+        <button id="btn-dashboard" class="flex-1 py-3 text-center tab-active">
+          Dashboard
+        </button>
+        <button id="btn-inward" class="flex-1 py-3 text-center">
+          Inward Verification
+        </button>
+        <button id="btn-inventory" class="flex-1 py-3 text-center">
+          Inventory
+        </button>
+        <button id="btn-sales" class="flex-1 py-3 text-center">
+          Sales Entry
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= DASHBOARD ================= -->
+    <section id="tab-dashboard" class="tab-content">
+      <!-- Date filter -->
+      <div class="flex flex-col md:flex-row md:items-end md:justify-end gap-2 mb-3">
+        <div class="flex items-center gap-2 text-xs md:text-sm">
+          <div>
+            <label for="dash-from" class="block text-gray-500 mb-0.5">From</label>
+            <input id="dash-from" type="date" class="input">
+          </div>
+          <div>
+            <label for="dash-to" class="block text-gray-500 mb-0.5">To</label>
+            <input id="dash-to" type="date" class="input">
+          </div>
+          <div class="flex gap-1 mt-4 md:mt-0">
+            <button id="dash-apply"
+              class="px-3 py-1 rounded-md bg-emerald-600 text-white text-xs md:text-sm font-semibold">
+              Apply
+            </button>
+            <button id="dash-clear"
+              class="px-3 py-1 rounded-md border border-gray-300 bg-white text-xs md:text-sm">
+              Clear
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div class="card text-center">
+          <div class="text-xs text-gray-500 uppercase">Total Invoices</div>
+          <div id="db-total-invoices" class="text-xl font-bold mt-1">0</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-xs text-gray-500 uppercase">Total Qty</div>
+          <div id="db-total-qty" class="text-xl font-bold mt-1">0</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-xs text-gray-500 uppercase">Total Sales (₦)</div>
+          <div id="db-total-amount" class="text-xl font-bold mt-1">0</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-xs text-gray-500 uppercase">Today’s Sales (₦)</div>
+          <div id="db-today-amount" class="text-xl font-bold mt-1 text-emerald-600">0</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Chart -->
+        <div class="card lg:col-span-2">
+          <h3 class="font-semibold mb-2">Sales (Last 7 Days)</h3>
+          <div class="h-64">
+            <canvas id="sales-7d-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Customers -->
+        <div class="card">
+          <h3 class="font-semibold mb-2">Top Customers</h3>
+          <table class="w-full text-sm text-left border-collapse">
+            <thead class="text-xs text-gray-500 border-b">
+              <tr>
+                <th class="p-2">Customer</th>
+                <th class="p-2 text-right">Amount (₦)</th>
+              </tr>
+            </thead>
+            <tbody id="db-top-customers-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card mt-4">
+        <h3 class="font-semibold mb-2">Recent Invoices</h3>
+        <table class="w-full text-sm text-left border-collapse">
+          <thead class="text-xs text-gray-500 border-b">
+            <tr>
+              <th class="p-2">Invoice No</th>
+              <th class="p-2">Date</th>
+              <th class="p-2">Customer</th>
+              <th class="p-2 text-right">Amount (₦)</th>
+            </tr>
+          </thead>
+          <tbody id="db-recent-invoices-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= INWARD ================= -->
+    <section id="tab-inward" class="tab-content hidden">
+      <div class="card">
+        <h2 class="font-semibold mb-2">Pending For Verification (Nigeria Godown)</h2>
+        <p class="text-xs text-gray-500 mb-2">
+          Bales from Inward sheet where Location = "Nigeria Godown" and
+          Verification is not "Verified".
+        </p>
+        <div id="verify-list" class="space-y-2 text-sm"></div>
+      </div>
+    </section>
+
+    <!-- ================= INVENTORY ================= -->
+    <section id="tab-inventory" class="tab-content hidden">
+      <div class="space-y-4">
+        <div class="card">
+          <h2 class="font-semibold mb-2">Inventory Overview</h2>
+          <div id="inventory-summary" class="text-sm text-gray-500">
+            Loading inventory summary...
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="card">
+            <h3 class="font-semibold mb-2">Fabric-wise Stock (Qty as Yard)</h3>
+            <table class="w-full text-left border-collapse">
+              <thead class="text-xs text-gray-500 border-b">
+                <tr>
+                  <th class="p-2">Fabric</th>
+                  <th class="p-2 text-center">Bales</th>
+                  <th class="p-2 text-right">Qty</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-fabric-body"></tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h3 class="font-semibold mb-2">Details</h3>
+            <div id="inventory-detail" class="text-sm text-gray-400">
+              Click a fabric row to see bale details.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= SALES ================= -->
+    <section id="tab-sales" class="tab-content hidden">
+      <div class="card space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-semibold mb-2">Sales Entry</h2>
+          <span id="sales-mode-label" class="text-xs text-gray-500">
+            New invoice mode
+          </span>
+        </div>
+
+        <!-- Header fields -->
+        <div class="grid md:grid-cols-4 gap-3 text-sm">
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Date</label>
+            <input id="sales-date" type="date" class="input" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Customer Name</label>
+            <input id="sales-customer" type="text" class="input" placeholder="Customer name" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Company Name (optional)</label>
+            <input id="sales-company" type="text" class="input" placeholder="Company name" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Invoice No</label>
+            <input id="sales-invoice" type="text" class="input" placeholder="Leave empty for auto" />
+          </div>
+
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Email (optional)</label>
+            <input id="sales-email" type="email" class="input" placeholder="Email" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Website (optional)</label>
+            <input id="sales-website" type="text" class="input" placeholder="Website" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">VAT No (optional)</label>
+            <input id="sales-vat" type="text" class="input" placeholder="VAT No" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Customer Image URL (optional)</label>
+            <input id="sales-image" type="text" class="input" placeholder="https://..." />
+          </div>
+        </div>
+
+        <!-- Bale list used by Load buttons (filled from Inventory) -->
+        <div class="mt-2">
+          <label class="block text-xs text-gray-600 mb-1" for="sales-bale">
+            Bale No(s) selected from Inventory
+          </label>
+          <div class="flex gap-2">
+            <input
+              id="sales-bale"
+              type="text"
+              class="input flex-1"
+              placeholder="e.g. A1, A2 (added automatically from Inventory)"
+            />
+            <!-- This button and the one below both call loadBaleStock() via app.js -->
+            <button
+              id="sales-bale-load"
+              type="button"
+              class="px-4 py-2 rounded-md border border-gray-300 bg-gray-100 text-sm"
+            >
+              Load
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">
+            In Inventory tab, click <strong>Add to Sales</strong> on a bale. Then come here and
+            press <strong>Load</strong> or <strong>Load from Inventory</strong> to create rows.
+          </p>
+        </div>
+
+        <!-- Lines table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead class="border-b text-xs text-gray-500">
+              <tr>
+                <th class="p-2">Bale No</th>
+                <th class="p-2">Fabric</th>
+                <th class="p-2">Quality</th>
+                <th class="p-2">Design No</th>
+                <th class="p-2">Color</th>
+                <th class="p-2 text-right">One pcs Qty</th>
+                <th class="p-2 text-right">Available</th>
+                <th class="p-2 text-right">Qty</th>
+                <th class="p-2">UOM</th>
+             
+                <th class="p-2 text-right">Selling Rate</th>
+                <th class="p-2 text-right">Amount</th>
+                <th class="p-2 text-center">Action</th>
+              </tr>
+            </thead>
+
+            <tbody id="sales-lines-body">
+              <!-- rows added dynamically by app.js -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Add / Total / Save -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between mt-2 gap-2">
+          <div class="flex gap-2">
+            <button
+              id="sales-add-line"
+              type="button"
+              class="px-4 py-2 rounded-md border border-gray-300 bg-gray-100 text-sm"
+            >
+              + Add Item
+            </button>
+            <button
+              id="sales-load-cart"
+              type="button"
+              class="px-4 py-2 rounded-md border border-emerald-500 text-emerald-600 bg-white text-sm"
+            >
+              Load from Inventory
+            </button>
+          </div>
+
+          <div class="text-sm text-gray-700">
+            Invoice Total:
+            <span id="sales-total-value" class="font-semibold">0.00</span>
+          </div>
+
+          <button
+            id="sales-save"
+            type="button"
+            class="px-5 py-2 rounded-md bg-emerald-600 text-white text-sm font-semibold"
+          >
+            Save Invoice
+          </button>
+        </div>
+      </div>
+
+      <!-- Recent invoices -->
+      <div class="card mt-4">
+        <h3 class="font-semibold mb-2">Recent Invoices (last 10)</h3>
+        <table class="w-full text-left text-sm border-collapse">
+          <thead class="border-b text-xs text-gray-500">
+            <tr>
+              <th class="p-2">Invoice No</th>
+              <th class="p-2">Date</th>
+              <th class="p-2">Customer</th>
+              <th class="p-2 text-right">Total</th>
+              <th class="p-2">PDF</th>
+              <th class="p-2 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody id="recent-invoices-body">
+            <tr>
+              <td colspan="6" class="p-2 text-xs text-gray-500">
+                No invoices yet.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- Refresh App button -->
+  <button
+    onclick="resetApp()"
+    style="
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      background: #10b981;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      z-index: 9999;
+    "
+  >
+    Refresh App
+  </button>
+
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js");
+    }
+  </script>
+</body>
+</html>

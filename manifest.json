@@ -1,0 +1,9 @@
+{
+  "name": "Aryan Export - Inventory & Sales",
+  "short_name": "Aryan Export",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#10B981",
+  "icons": []
+}
